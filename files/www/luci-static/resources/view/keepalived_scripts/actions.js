@@ -332,7 +332,7 @@ return view.extend({
 		o = s.option(form.DummyValue, 'running', _('Running'),
 			_('Whether the service is running right now.'));
 		o.cfgvalue = function() {
-			const svc = data.service?.lease_sync?.instances;
+			const svc = data.syncService?.lease_sync?.instances;
 
 			return Object.values(svc ?? {}).some(i => i.running) ? _('On') : _('Off');
 		};

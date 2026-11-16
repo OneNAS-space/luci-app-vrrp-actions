@@ -198,6 +198,11 @@ function loadState() {
 	});
 }
 
+/* same reading as ks_flag in the hotplug script: off unless switched on */
+function isEnabled() {
+	return [ '1', 'on', 'yes', 'true' ].includes(uci.get(CONFIG, 'global', 'enabled'));
+}
+
 /* the external services only when their init script exists (rc == null: not known, show all) */
 function isInstalled(svc, rc) {
 	return !EXTERNAL[svc] || rc == null || (EXTERNAL[svc] in rc);
@@ -231,7 +236,7 @@ const STATES = { MASTER: 'master', BACKUP: 'backup', FAULT: 'fault' };
 /* what is followed, its state and whether the role actions are switched on; one row */
 function roleTable(data) {
 	const i = roleInfo(data.status, data.service, data.f);
-	const enabled = uci.get(CONFIG, 'global', 'enabled') !== '0';
+	const enabled = isEnabled();
 	const follows = data.f.type
 		? (data.f.type === 'group' ? _('Sync group %s') : _('Instance %s')).format(data.f.names[0])
 		: '-';
@@ -305,5 +310,5 @@ function actionsTable(data) {
 return baseclass.extend({
 	CONFIG, SERVICES, PULL, EXTERNAL, ROLES, ROLE_COLORS, ORDER, DEFAULTS, ACTION_LABELS,
 	formatTime, followed, roleInfo, roleText, loadState, isInstalled, actionOf,
-	roleNode, roleTable, actionsTable
+	roleNode, roleTable, actionsTable, isEnabled
 });

@@ -13,7 +13,7 @@
 # it as it is). Without the file, or for an option it lacks, the built-in
 # defaults apply, which are:
 #   MASTER : DHCPv4 on (option 3/6 -> LAN VIP), DHCPv6/RA on, natmap on,
-#            cloudflared off, lease_sync (push to peer) on; first takes the
+#            cloudflared off, lease_sync on (needs sync.enable); first takes the
 #            peer's leases and dhcp config
 #   BACKUP : DHCP off but dnsmasq keeps running (DNS only), natmap off,
 #            cloudflared on, lease_sync off
@@ -38,6 +38,10 @@
 
 KS_SCRIPTS_DIR="/etc/keepalived/scripts"
 KS_INITIAL_FLAG="/tmp/keepalived_initial_start"
+# Present while the current state of this node wants lease_sync to run. The
+# init script starts the service only with this file and sync.enable, so a
+# reboot does not start it before keepalived has said what this node is.
+KS_SYNC_WANTED="/var/run/keepalived_scripts.lease_sync"
 # Written by the stock 01-ubus hotplug script: <NAME>_<TYPE>/STATUS
 KS_STATUS_DIR="/var/run/keepalived"
 # keepalived always starts in BACKUP and may become MASTER within seconds
@@ -498,33 +502,35 @@ ks_restart_odhcpd() {
 	/etc/init.d/odhcpd restart 2>/dev/null || ks_log "Error restarting odhcpd"
 }
 
-# The "sync" section may be missing in a config from before it existed
-ks_ensure_sync_section() {
-	uci -q get "$KS_CONFIG.sync" >/dev/null 2>&1 || uci set "$KS_CONFIG.sync=$KS_CONFIG"
+# --- lease_sync: pushes this node's leases and dhcp config to the peer, or
+# pulls the peer's (sync.mode). sync.enable is the user's switch and is never
+# written here: the state only says whether the service is wanted now. ---
+ks_lease_sync_stop() {
+	# "stop" of a procd service that is not registered makes
+	# ubus print "Command failed: ... (Not found)"
+	if /etc/init.d/lease_sync running >/dev/null 2>&1; then
+		ks_log "Stopping Procd lease sync service"
+		/etc/init.d/lease_sync stop
+	else
+		ks_log "Procd lease sync service is not running, nothing to stop"
+	fi
 }
 
-# --- lease_sync: pushes this node's leases and dhcp config to the peer ---
 ks_lease_sync() {
 	case "$1" in
 		on)
-			ks_log "Starting Procd lease sync service (Silent Mode)"
-			ks_ensure_sync_section
-			uci set "$KS_CONFIG.sync.enable=1"
-			uci commit "$KS_CONFIG"
-			/etc/init.d/lease_sync restart
+			: > "$KS_SYNC_WANTED"
+			if [ "$(ks_flag sync enable 0)" -ne 1 ]; then
+				ks_log "Lease sync is switched off in $KS_CONFIG (sync.enable), not starting it"
+				ks_lease_sync_stop
+			else
+				ks_log "Starting Procd lease sync service (Silent Mode)"
+				/etc/init.d/lease_sync restart
+			fi
 			;;
 		off)
-			# "stop" of a procd service that is not registered makes
-			# ubus print "Command failed: ... (Not found)"
-			if /etc/init.d/lease_sync running >/dev/null 2>&1; then
-				ks_log "Stopping Procd lease sync service"
-				/etc/init.d/lease_sync stop
-			else
-				ks_log "Procd lease sync service is not running, nothing to stop"
-			fi
-			ks_ensure_sync_section
-			uci set "$KS_CONFIG.sync.enable=0"
-			uci commit "$KS_CONFIG"
+			rm -f "$KS_SYNC_WANTED"
+			ks_lease_sync_stop
 			;;
 	esac
 }

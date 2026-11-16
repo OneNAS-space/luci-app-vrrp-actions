@@ -25,8 +25,9 @@
 #
 # 4. sync.enable used to be switched by the lease_sync role actions themselves.
 #    It is now the user's switch (default off) and sync.mode is new. An
-#    existing config has no sync.mode: it gets mode push and enable 1, which
-#    keeps what ran before, and a lease_sync that is running now is marked as
+#    existing config has no sync.mode: it gets mode push, enable 1 and
+#    sync_daemon 1 (the dnsmasq and odhcpd sections are mirrored only when
+#    asked for now), which keeps what ran before, and a lease_sync that is running now is marked as
 #    wanted (the init script starts the service only with that mark).
 
 failed=0
@@ -73,6 +74,8 @@ fi
 if [ -z "$(uci -q get "$new.sync.mode" 2>/dev/null)" ]; then
 	uci -q set "$new.sync.mode=push" || failed=1
 	uci -q set "$new.sync.enable=1" || failed=1
+	# the dnsmasq and odhcpd sections used to be mirrored too
+	uci -q set "$new.sync.sync_daemon=1" || failed=1
 fi
 
 if [ -n "$(uci -q changes "$new" 2>/dev/null)" ]; then

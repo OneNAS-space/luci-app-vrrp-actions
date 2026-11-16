@@ -9,7 +9,7 @@
 #                   authority (for example a main router that is the Backup)
 # What is mirrored:
 #   1. dhcp.leases   (rsync, either direction)
-#   2. /etc/config/dhcp, as a whole (hosts, tags, dnsmasq options, ...), except
+#   2. /etc/config/dhcp, as a whole (hosts, tags, ...), except
 #      the options this node's role scripts own, see KEEP_LOCAL below
 #
 # Layout of this file:
@@ -67,6 +67,11 @@ load_config() {
     config_get USER_PEER_IP sync peer_ip
     config_get_bool SYNC_DHCP sync sync_dhcp 1
     config_get MODE sync mode push
+    # the daemon options of each node (dnsmasq: cache, upstream servers, mounts
+    # of passwall2 or AdGuard Home, ...) are its own unless asked for
+    config_get_bool SYNC_DAEMON sync sync_daemon 0
+    KEEP_TYPES=""
+    [ "$SYNC_DAEMON" -eq 1 ] || KEEP_TYPES="dnsmasq odhcpd"
     [ "$MODE" = pull ] || MODE=push
     KEEP_LOCAL="$KEEP_LOCAL_DEFAULT"
     config_list_foreach sync keep_local _add_keep_local
@@ -286,9 +291,10 @@ push_leases() {
 #
 # The Master's /etc/config/dhcp is mirrored to the Backup, whose DHCP server is
 # off and whose LuCI therefore cannot edit hosts, tags and the like. Sections
-# are copied whole (static hosts, tags with their dhcp_option, dnsmasq options,
-# other interfaces) apart from the KEEP_LOCAL options, which stay as each node
-# has them. The same function works in both directions: the Master pushes, a
+# are copied whole (static hosts, tags with their dhcp_option, other
+# interfaces) apart from the KEEP_LOCAL options and, unless sync_daemon is on,
+# the [dnsmasq] and [odhcpd] sections (KEEP_TYPES): those stay as each node has
+# them. The same function works in both directions: the Master pushes, a
 # node that has just become Master pulls first. When both sides already match
 # nothing is written and nothing is restarted.
 #
@@ -317,11 +323,15 @@ dhcp_export_raw() {
 }
 
 # awk code shared by dhcp_strip and dhcp_keepers: kept(sect, line) says whether
-# an option/list line belongs to this node (see KEEP_LOCAL)
+# an option/list line belongs to this node (see KEEP_LOCAL, and KEEP_TYPES:
+# every option of a section of such a type). The caller sets typ to the type of
+# the current section.
 DHCP_AWK_KEEP='
 function setup(   n, a, i, t, j) {
     Q = sprintf("%c", 39); TAB = sprintf("%c", 9)
     item = "^" TAB "(option|list) "
+    n = split(types, a, " ")
+    for (i = 1; i <= n; i++) T[a[i]] = 1
     n = split(keep, a, " ")
     for (i = 1; i <= n; i++) {
         t = a[i]; j = index(t, "~")
@@ -329,6 +339,7 @@ function setup(   n, a, i, t, j) {
     }
 }
 function kept(sect, line,   key, v) {
+    if (typ in T) return 1
     if (sect == "") return 0
     key = sect "." $2
     if (key in K) return 1
@@ -341,11 +352,11 @@ function kept(sect, line,   key, v) {
 # nothing once they are gone is dropped too: apply_dhcp re-creates it from the
 # node's own options, so both sides must not see it as a difference.
 dhcp_strip() {
-    awk -v keep="$KEEP_LOCAL" "$DHCP_AWK_KEEP"'
-        function head() { if (hdr != "") { if (!(removed && !shown)) print hdr; hdr = "" } }
+    awk -v keep="$KEEP_LOCAL" -v types="$KEEP_TYPES" "$DHCP_AWK_KEEP"'
+        function head() { if (hdr != "") { if (!(removed && !shown) || (typ in T)) print hdr; hdr = "" } }
         BEGIN { setup() }
         /^[[:space:]]*$/ { next }
-        /^config / { head(); hdr = $0; sect = ""; removed = 0; shown = 0; if (split($0, p, Q) >= 3) sect = p[2]; next }
+        /^config / { head(); hdr = $0; typ = $2; sect = ""; removed = 0; shown = 0; if (split($0, p, Q) >= 3) sect = p[2]; next }
         $0 ~ item  {
             if (kept(sect, $0)) { removed = 1; next }
             if (hdr != "") { print hdr; hdr = "" }
@@ -366,9 +377,9 @@ dhcp_export() {
 
 # The KEEP_LOCAL options of this node, each under its section header
 dhcp_keepers() {
-    dhcp_export_raw | awk -v keep="$KEEP_LOCAL" "$DHCP_AWK_KEEP"'
+    dhcp_export_raw | awk -v keep="$KEEP_LOCAL" -v types="$KEEP_TYPES" "$DHCP_AWK_KEEP"'
         BEGIN { setup() }
-        /^config / { hdr = $0; sect = ""; shown = 0; if (split($0, p, Q) >= 3) sect = p[2]; next }
+        /^config / { hdr = $0; typ = $2; sect = ""; shown = 0; if (split($0, p, Q) >= 3) sect = p[2]; next }
         $0 ~ item  { if (kept(sect, $0)) { if (!shown) { print hdr; shown = 1 }; print } }
     '
 }

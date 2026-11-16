@@ -305,9 +305,9 @@ return view.extend({
 			}
 		});
 
-		/* ---- lease sync ---- */
-		s = m.section(form.NamedSection, 'sync', 'keepalived_scripts', _('Lease sync'),
-			_('The lease_sync service mirrors the leases and /etc/config/dhcp between this node and its peer, in one direction.'));
+		/* ---- DHCP sync (the lease_sync service) ---- */
+		s = m.section(form.NamedSection, 'sync', 'keepalived_scripts', _('DHCP sync'),
+			_('The DHCP sync service mirrors the leases and /etc/config/dhcp between this node and its peer, in one direction.'));
 		s.addremove = false;
 
 		/* the switch is the user's; the lease_sync action of the current state then starts or stops the service */
@@ -317,8 +317,8 @@ return view.extend({
 		o.default = '0';
 		o.rmempty = false;
 		dynamicHelp(o, {
-			on: _('The service may run: it follows the Lease sync action of the current state (On: runs, Off: stopped).'),
-			off: _('The service never runs, whatever the Lease sync actions of the states say.') });
+			on: _('The service may run: it follows the DHCP sync action of the current state (On: runs, Off: stopped).'),
+			off: _('The service never runs, whatever the DHCP sync actions of the states say.') });
 
 		o = s.option(form.ListValue, 'mode', _('Mode'));
 		o.value('push', _('Push to the peer'));
@@ -328,14 +328,6 @@ return view.extend({
 		dynamicHelp(o, {
 			push: _('This node is the authority: its leases and DHCP config are sent to the peer.'),
 			pull: _('The peer is the authority: its leases and DHCP config are taken over here and nothing is sent. The DHCP switches of the LAN of this node stay as they are.') });
-
-		o = s.option(form.DummyValue, 'running', _('Running'),
-			_('Whether the service is running right now.'));
-		o.cfgvalue = function() {
-			const svc = data.syncService?.lease_sync?.instances;
-
-			return Object.values(svc ?? {}).some(i => i.running) ? _('On') : _('Off');
-		};
 
 		o = s.option(form.Flag, 'sync_dhcp', _('Sync the DHCP config'),
 			_('Mirror /etc/config/dhcp (hosts, tags, ...) as well as the leases.'));

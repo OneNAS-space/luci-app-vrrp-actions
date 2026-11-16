@@ -3,7 +3,7 @@
 #     when the keepalived state changes. Every service gets an action per
 #     state: 'on', 'off' or 'keep' (leave it as it is).
 #   sync: the lease_sync service that mirrors leases and /etc/config/dhcp
-#     between the two routers.
+#     between the two routers, in the direction set by mode.
 # What is not listed here falls back to the defaults shown below, so the file
 # can be trimmed to the lines that differ.
 
@@ -73,9 +73,14 @@ config keepalived_scripts 'shutdown'
 
 # lease_sync service (sync_dhcp.sh, /etc/init.d/lease_sync)
 config keepalived_scripts 'sync'
-    # Switched by the role actions above (lease_sync on/off), not a setting to
-    # change by hand while those are in use
+    # 1 = the service may run: it then follows the lease_sync action of the
+    # current state above (on = runs, off = stopped). 0 = never, whatever the
+    # states say. Off until you switch it on, as it writes to the peer in push mode.
     option enable '0'
+    # push = send this node's leases and dhcp config to the peer (the Master
+    # is the authority); pull = take the peer's, send nothing (the peer stays
+    # the authority, for example a main router that is the Backup)
+    option mode 'push'
     # seconds between periodic re-checks, and between retries after a failure
     option interval '3600'
     option retry_interval '30'

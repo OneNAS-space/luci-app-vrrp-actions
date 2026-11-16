@@ -307,15 +307,34 @@ return view.extend({
 
 		/* ---- lease sync ---- */
 		s = m.section(form.NamedSection, 'sync', 'keepalived_scripts', _('Lease sync'),
-			_('The lease_sync service mirrors the leases and /etc/config/dhcp of the MASTER to its peer.'));
+			_('The lease_sync service mirrors the leases and /etc/config/dhcp between this node and its peer, in one direction.'));
 		s.addremove = false;
 
-		/* Switched by the Lease sync actions of the states. Shown as text, never written by the page:
-		 * a copy of the page that was loaded before a state change must not switch the service back. */
-		o = s.option(form.DummyValue, 'enable', _('Running'),
-			_('Switched by the Lease sync actions of the states (on in MASTER, off in BACKUP and FAULT by default), not a setting to change by hand.'));
-		o.cfgvalue = function(section_id) {
-			return uci.get(CONFIG, section_id, 'enable') == '1' ? _('On') : _('Off');
+		/* the switch is the user's; the lease_sync action of the current state then starts or stops the service */
+		o = s.option(form.Flag, 'enable', _('Enabled'));
+		o.enabled = '1';
+		o.disabled = '0';
+		o.default = '0';
+		o.rmempty = false;
+		dynamicHelp(o, {
+			on: _('The service may run: it follows the Lease sync action of the current state (On: runs, Off: stopped).'),
+			off: _('The service never runs, whatever the Lease sync actions of the states say.') });
+
+		o = s.option(form.ListValue, 'mode', _('Mode'));
+		o.value('push', _('Push to the peer'));
+		o.value('pull', _('Pull from the peer'));
+		o.default = 'push';
+		o.rmempty = false;
+		dynamicHelp(o, {
+			push: _('This node is the authority: its leases and DHCP config are sent to the peer.'),
+			pull: _('The peer is the authority: its leases and DHCP config are taken over here and nothing is sent. The DHCP switches of the LAN of this node stay as they are.') });
+
+		o = s.option(form.DummyValue, 'running', _('Running'),
+			_('Whether the service is running right now.'));
+		o.cfgvalue = function() {
+			const svc = data.service?.lease_sync?.instances;
+
+			return Object.values(svc ?? {}).some(i => i.running) ? _('On') : _('Off');
 		};
 
 		o = s.option(form.Flag, 'sync_dhcp', _('Sync the DHCP config'),

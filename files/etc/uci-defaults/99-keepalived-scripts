@@ -22,8 +22,19 @@
 #    changed, is moved aside to .old. The file names in /etc/crontabs/root and
 #    /etc/rc.local are updated. A lease_sync service that was started before
 #    the upgrade still runs the old path and is restarted.
+#
+# 4. sync.enable used to be switched by the lease_sync role actions themselves.
+#    It is now the user's switch (default off) and sync.mode is new. An
+#    existing config has no sync.mode: it gets mode push and enable 1, which
+#    keeps what ran before, and a lease_sync that is running now is marked as
+#    wanted (the init script starts the service only with that mark).
 
 failed=0
+
+# before any commit below restarts the service through its config trigger
+if [ -x /etc/init.d/lease_sync ] && /etc/init.d/lease_sync running >/dev/null 2>&1; then
+	: > /var/run/keepalived_scripts.lease_sync
+fi
 
 hook=/etc/keepalived.user
 if [ -f "$hook" ] &&
@@ -57,6 +68,11 @@ if [ -f "$old" ]; then
 			uci -q add_list "$new.sync.keep_local=$val" || failed=1
 		done
 	fi
+fi
+
+if [ -z "$(uci -q get "$new.sync.mode" 2>/dev/null)" ]; then
+	uci -q set "$new.sync.mode=push" || failed=1
+	uci -q set "$new.sync.enable=1" || failed=1
 fi
 
 if [ -n "$(uci -q changes "$new" 2>/dev/null)" ]; then

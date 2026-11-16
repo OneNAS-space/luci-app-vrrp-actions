@@ -675,7 +675,7 @@ ks_on_fault() {
 }
 
 ks_main() {
-	if [ "$(ks_flag global enabled 1)" -ne 1 ]; then
+	if [ "$(ks_flag global enabled 0)" -ne 1 ]; then
 		ks_log "Disabled in $KS_CONFIG (global.enabled), ignoring ACTION=$ACTION TYPE=$TYPE"
 		return 0
 	fi

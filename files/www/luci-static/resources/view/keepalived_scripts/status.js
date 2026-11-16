@@ -26,7 +26,7 @@ return view.extend({
 		dom.content(roleBox, ks.roleTable(data));
 
 		const table = ks.actionsTable(data);
-		const enabled = uci.get(ks.CONFIG, 'global', 'enabled') !== '0';
+		const enabled = ks.isEnabled();
 
 		actionsBox.style.display = '';
 		dom.content(actionsBox, [

@@ -232,7 +232,7 @@ return view.extend({
 			_('Off: the script does nothing at all, whatever the other tabs say.'));
 		o.enabled = '1';
 		o.disabled = '0';
-		o.default = '1';
+		o.default = '0';
 		o.rmempty = false;
 		dynamicHelp(o, {
 			on: _('The script follows keepalived and carries out the actions of the tabs.'),

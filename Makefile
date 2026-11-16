@@ -5,8 +5,8 @@ include $(TOPDIR)/rules.mk
 PKG_LICENSE:=GPL-3.0-or-later
 PKG_MAINTAINER:=Jackie Han <jackie.han@gmail.com>
 PKG_NAME:=luci-app-vrrp-actions
-PKG_VERSION:=1.0.3
-PKG_RELEASE:=2
+PKG_VERSION:=1.0.4
+PKG_RELEASE:=1
 
 PKG_BUILD_DIR := $(BUILD_DIR)/$(PKG_NAME)
 

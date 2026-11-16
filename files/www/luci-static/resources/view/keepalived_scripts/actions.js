@@ -338,11 +338,21 @@ return view.extend({
 		};
 
 		o = s.option(form.Flag, 'sync_dhcp', _('Sync the DHCP config'),
-			_('Mirror /etc/config/dhcp (hosts, tags, dnsmasq options, ...) as well as the leases.'));
+			_('Mirror /etc/config/dhcp (hosts, tags, ...) as well as the leases.'));
 		o.enabled = '1';
 		o.disabled = '0';
 		o.default = '1';
 		o.rmempty = false;
+
+		o = s.option(form.Flag, 'sync_daemon', _('Sync the dnsmasq and odhcpd options'));
+		o.enabled = '1';
+		o.disabled = '0';
+		o.default = '0';
+		o.rmempty = false;
+		o.depends('sync_dhcp', '1');
+		dynamicHelp(o, {
+			on: _('The [dnsmasq] and [odhcpd] sections are mirrored too. Only for two routers that run the same setup.'),
+			off: _('Each node keeps its own [dnsmasq] and [odhcpd] sections (cache, upstream servers, mounts of PassWall2 or AdGuard Home, ...). Hosts, tags and the other sections are mirrored.') });
 
 		o = s.option(form.Value, 'peer_ip', _('Peer address'),
 			_('Empty: the unicast peer of the br-lan VRRP instance.'));

@@ -2,7 +2,12 @@
 #
 # /etc/keepalived/scripts/sync_dhcp.sh
 #
-# Keeps the Backup router in step with the Master:
+# Keeps the two routers in step, in one direction, set by "mode" in the sync
+# section of /etc/config/keepalived_scripts:
+#   push (default): this node, the Master, sends its data to the peer
+#   pull          : this node takes the data of the peer, which stays the
+#                   authority (for example a main router that is the Backup)
+# What is mirrored:
 #   1. dhcp.leases   (rsync, either direction)
 #   2. /etc/config/dhcp, as a whole (hosts, tags, dnsmasq options, ...), except
 #      the options this node's role scripts own, see KEEP_LOCAL below
@@ -61,6 +66,8 @@ load_config() {
     config_get SSH_KEY sync ssh_key "/root/.ssh/id_dropbear"
     config_get USER_PEER_IP sync peer_ip
     config_get_bool SYNC_DHCP sync sync_dhcp 1
+    config_get MODE sync mode push
+    [ "$MODE" = pull ] || MODE=push
     KEEP_LOCAL="$KEEP_LOCAL_DEFAULT"
     config_list_foreach sync keep_local _add_keep_local
     SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
@@ -225,6 +232,7 @@ pull_leases() {
     rm -f "$tmp_file"
     if [ "$rc" -eq 0 ]; then
         logger "sync_dhcp: Peer ($source_ip) has no leases to take over, keeping local leases."
+        return 2
     else
         logger "sync_dhcp: Error: Failed to pull DHCP leases from peer ($source_ip) (rc=$rc${detail:+: $detail}). Keeping local leases."
     fi
@@ -617,7 +625,7 @@ pull_dhcp() {
     if ! grep -Eq '^config (host|tag)' "$in_file" && dhcp_export 2>/dev/null | grep -Eq '^config (host|tag)'; then
         rm -f "$in_file"
         logger "sync_dhcp: Peer ($source_ip) has no host/tag entries, keeping the local dhcp config."
-        return 1
+        return 2
     fi
 
     [ "$norestart" = "norestart" ] && DHCP_NO_RESTART=1
@@ -755,13 +763,75 @@ daemon_push() {
     done
 }
 
+# mode "pull": take the leases and the dhcp config of the peer every INTERVAL
+# seconds (RETRY_INTERVAL after a failure). Nothing is ever sent to the peer.
+# Only a real failure (exit 1) is retried early; "nothing to take over" (exit 2)
+# waits for the next round.
+daemon_pull() {
+    logger "sync_dhcp: Background service starting (pulling from the peer)..."
+    local CACHED_PEER_IP=""
+    local TARGET_IP FAILED rc
+
+    SLEEP_PID=""
+    trap '[ -n "$SLEEP_PID" ] && kill "$SLEEP_PID" 2>/dev/null; exit 0' TERM INT
+
+    while true; do
+        load_config
+        if [ "$ENABLE" -ne 1 ]; then
+            logger "sync_dhcp: Service disabled via UCI, exiting."
+            break
+        fi
+        if [ "$MODE" != pull ]; then
+            logger "sync_dhcp: Mode changed, restarting."
+            break
+        fi
+
+        FAILED=0
+        TARGET_IP="$USER_PEER_IP"
+        if [ -z "$TARGET_IP" ]; then
+            [ -z "$CACHED_PEER_IP" ] && CACHED_PEER_IP=$(get_peer_lan_ip)
+            TARGET_IP="$CACHED_PEER_IP"
+        fi
+
+        if [ -z "$TARGET_IP" ]; then
+            logger "sync_dhcp: Error: No peer address, nothing to pull."
+            FAILED=1
+        else
+            pull_leases "$TARGET_IP"
+            [ $? -eq 1 ] && FAILED=1
+            if [ "$SYNC_DHCP" -eq 1 ]; then
+                pull_dhcp "$TARGET_IP"
+                [ $? -eq 1 ] && FAILED=1
+            fi
+        fi
+
+        if [ "$FAILED" -eq 1 ]; then
+            CACHED_PEER_IP=""
+            sleep "$RETRY_INTERVAL" &
+        else
+            sleep "$INTERVAL" &
+        fi
+        SLEEP_PID=$!
+        wait "$SLEEP_PID"
+        SLEEP_PID=""
+    done
+}
+
+# procd runs this (see /etc/init.d/lease_sync); daemon_push is the old name
+daemon() {
+    case "$MODE" in
+        pull) daemon_pull ;;
+        *) daemon_push ;;
+    esac
+}
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 # pull/push without an IP use the configured or keepalived peer
 case "$1" in
-    daemon_push)
-        daemon_push ;;
+    daemon | daemon_push)
+        daemon ;;
     get_peer_ip)
         get_peer_lan_ip ;;
     pull)
@@ -782,6 +852,6 @@ case "$1" in
         # called through ssh by pull_dhcp on the peer
         dhcp_export ;;
     *)
-        logger "sync_dhcp: Usage: $0 [pull|push|push_dhcp|pull_dhcp|apply_dhcp|export_dhcp|daemon_push|get_peer_ip]"
+        logger "sync_dhcp: Usage: $0 [pull|push|push_dhcp|pull_dhcp|apply_dhcp|export_dhcp|daemon|get_peer_ip]"
         exit 1 ;;
 esac

@@ -21,10 +21,10 @@ const SERVICES = {
 		on: _('Enabled in its config and started.'),
 		off: _('Disabled in its config and stopped.'),
 		keep: _('Left as it is.') } ],
-	lease_sync: [ _('Lease sync'), {
-		on: _('The lease sync service runs here, pushing to or pulling from the peer as set in the Lease sync tab, where it also has to be enabled.'),
-		off: _('The lease sync service is stopped.'),
-		keep: _('The lease sync service is left as it is.') } ],
+	lease_sync: [ _('DHCP sync'), {
+		on: _('The DHCP sync service runs here, pushing to or pulling from the peer as set in the DHCP sync tab, where it also has to be enabled.'),
+		off: _('The DHCP sync service is stopped.'),
+		keep: _('The DHCP sync service is left as it is.') } ],
 	dhcpv6: [ _('DHCPv6 / RA'), {
 		on: _('DHCPv6, prefix delegation and router advertisements of the LAN are switched on, with the RA flags and NTP servers of the General settings.'),
 		off: _('DHCPv6, prefix delegation and router advertisements of the LAN are switched off and the RA flags are cleared.'),
@@ -187,15 +187,14 @@ function loadState() {
 		L.resolveDefault(uci.load('keepalived'), null),
 		L.resolveDefault(callRcList(), null),
 		L.resolveDefault(callKeepalivedStatus(), null),
-		L.resolveDefault(callServiceList('keepalived'), null),
-		L.resolveDefault(callServiceList('lease_sync'), null)
+		L.resolveDefault(callServiceList('keepalived'), null)
 	]).then(res => {
 		/* the keepalived config is what the actions follow: without it there is nothing to do */
 		const f = (res[1] != null)
 			? followed()
 			: { type: null, names: [], groups: [], instances: [], unreadable: true };
 
-		return { f, rc: res[2], status: res[3], service: res[4], syncService: res[5] };
+		return { f, rc: res[2], status: res[3], service: res[4] };
 	});
 }
 
@@ -204,14 +203,14 @@ function isEnabled() {
 	return [ '1', 'on', 'yes', 'true' ].includes(uci.get(CONFIG, 'global', 'enabled'));
 }
 
-/* what an On action of lease_sync does, which depends on the switch and the mode of the Lease sync tab */
+/* what an On action of lease_sync does, which depends on the switch and the mode of the DHCP sync tab */
 function syncEffect() {
 	if (uci.get(CONFIG, 'sync', 'enable') !== '1')
-		return _('Lease sync is switched off in the Lease sync tab, so nothing runs.');
+		return _('DHCP sync is switched off in the DHCP sync tab, so nothing runs.');
 
 	return (uci.get(CONFIG, 'sync', 'mode') === 'pull')
-		? _('The lease sync service runs: the leases and the DHCP config of the peer are pulled to this node.')
-		: _('The lease sync service runs: the leases and the DHCP config of this node are pushed to the peer.');
+		? _('The DHCP sync service runs: the leases and the DHCP config of the peer are pulled to this node.')
+		: _('The DHCP sync service runs: the leases and the DHCP config of this node are pushed to the peer.');
 }
 
 /* the external services only when their init script exists (rc == null: not known, show all) */
@@ -225,7 +224,7 @@ function actionOf(state, svc) {
 }
 
 /* built-in defaults of 560-keepalived-scripts, per state */
-/* the order on the page: the DHCP side first (dnsmasq, DHCPv4, DHCPv6), then lease sync,
+/* the order on the page: the DHCP side first (dnsmasq, DHCPv4, DHCPv6), then DHCP sync,
  * then the external services in alphabetical order */
 const ORDER = [ 'dnsmasq', 'dhcpv4', 'dhcpv6', 'lease_sync', 'cloudflared', 'natmap' ];
 const DEFAULTS = {

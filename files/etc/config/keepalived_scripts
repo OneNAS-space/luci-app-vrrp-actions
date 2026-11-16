@@ -89,6 +89,10 @@ config keepalived_scripts 'sync'
     option peer_ip ''
     # mirror /etc/config/dhcp too (hosts, tags, dnsmasq options, ...)
     option sync_dhcp '1'
+    # 0 = the [dnsmasq] and [odhcpd] sections stay as each node has them (a
+    # router that runs PassWall2 or AdGuard Home has its own options there);
+    # 1 = mirrored as well, for two routers with the same setup
+    option sync_daemon '0'
     # more options that must stay as each node has them (the role switches
     # of dhcp.lan are built in):
     # list keep_local 'lan.leasetime'

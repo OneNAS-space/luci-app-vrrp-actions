@@ -187,14 +187,15 @@ function loadState() {
 		L.resolveDefault(uci.load('keepalived'), null),
 		L.resolveDefault(callRcList(), null),
 		L.resolveDefault(callKeepalivedStatus(), null),
-		L.resolveDefault(callServiceList('keepalived'), null)
+		L.resolveDefault(callServiceList('keepalived'), null),
+		L.resolveDefault(callServiceList('lease_sync'), null)
 	]).then(res => {
 		/* the keepalived config is what the actions follow: without it there is nothing to do */
 		const f = (res[1] != null)
 			? followed()
 			: { type: null, names: [], groups: [], instances: [], unreadable: true };
 
-		return { f, rc: res[2], status: res[3], service: res[4] };
+		return { f, rc: res[2], status: res[3], service: res[4], syncService: res[5] };
 	});
 }
 

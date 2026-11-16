@@ -22,7 +22,7 @@ const SERVICES = {
 		off: _('Disabled in its config and stopped.'),
 		keep: _('Left as it is.') } ],
 	lease_sync: [ _('Lease sync'), {
-		on: _('The lease sync service runs: the leases and the DHCP config of this node are pushed to the peer (see the Lease sync settings).'),
+		on: _('The lease sync service runs here, pushing to or pulling from the peer as set in the Lease sync tab, where it also has to be enabled.'),
 		off: _('The lease sync service is stopped.'),
 		keep: _('The lease sync service is left as it is.') } ],
 	dhcpv6: [ _('DHCPv6 / RA'), {
@@ -203,6 +203,16 @@ function isEnabled() {
 	return [ '1', 'on', 'yes', 'true' ].includes(uci.get(CONFIG, 'global', 'enabled'));
 }
 
+/* what an On action of lease_sync does, which depends on the switch and the mode of the Lease sync tab */
+function syncEffect() {
+	if (uci.get(CONFIG, 'sync', 'enable') !== '1')
+		return _('Lease sync is switched off in the Lease sync tab, so nothing runs.');
+
+	return (uci.get(CONFIG, 'sync', 'mode') === 'pull')
+		? _('The lease sync service runs: the leases and the DHCP config of the peer are pulled to this node.')
+		: _('The lease sync service runs: the leases and the DHCP config of this node are pushed to the peer.');
+}
+
 /* the external services only when their init script exists (rc == null: not known, show all) */
 function isInstalled(svc, rc) {
 	return !EXTERNAL[svc] || rc == null || (EXTERNAL[svc] in rc);
@@ -277,7 +287,7 @@ function actionsTable(data) {
 	const rows = ORDER.filter(svc => DEFAULTS[state][svc] != null && isInstalled(svc, data.rc)).map(svc => {
 		const action = actionOf(state, svc);
 
-		return [ SERVICES[svc][0], action, SERVICES[svc][1][action] ];
+		return [ SERVICES[svc][0], action, (svc === 'lease_sync' && action === 'on') ? syncEffect() : SERVICES[svc][1][action] ];
 	});
 
 	/* what MASTER takes over from the peer, done before the actions above */

@@ -562,6 +562,36 @@ ks_still_backup() {
 	[ -z "$state" ] || [ "$state" = "NOTIFY_BACKUP" ]
 }
 
+# What the current state of the followed group/instance asks of lease_sync,
+# without waiting for the next event: sets or removes the mark that the init
+# script of lease_sync looks at. It is called by that init script
+# (ACTION=reconcile), when the service is started by hand, by a change of its
+# settings or after an install, none of which is a keepalived state change.
+ks_sync_reconcile() {
+	local kind name state
+
+	set -- $(ks_followed)
+	kind=$1
+	name=$2
+	case "$kind" in
+		group) kind=GROUP ;;
+		instance) kind=INSTANCE ;;
+		*) return 0 ;;
+	esac
+
+	case "$(cat "$KS_STATUS_DIR/${name}_${kind}/STATUS" 2>/dev/null)" in
+		NOTIFY_MASTER) state=master ;;
+		NOTIFY_BACKUP) state=backup ;;
+		NOTIFY_FAULT) state=fault ;;
+		*) return 0 ;;
+	esac
+
+	case "$(ks_action "$state" lease_sync)" in
+		on) : > "$KS_SYNC_WANTED" ;;
+		off) rm -f "$KS_SYNC_WANTED" ;;
+	esac
+}
+
 # --- State handlers ---
 
 # One service, one action
@@ -688,6 +718,11 @@ ks_main() {
 
 	if ! ks_have_driver; then
 		ks_log "Nothing to follow (no vrrp_sync_group or vrrp_instance to pick): ignoring ACTION=$ACTION"
+		return 0
+	fi
+
+	if [ "$ACTION" = reconcile ]; then
+		ks_sync_reconcile
 		return 0
 	fi
 

@@ -8,10 +8,14 @@ start_service() {
     config_get_bool enable sync enable 0
     [ "$enable" -eq 0 ] && return
 
-    # Only while a state of this node asks for it: 560-keepalived-scripts
+    # Only while the state of this node asks for it: 560-keepalived-scripts
     # creates this file for a state whose lease_sync action is on and removes
-    # it for "off". It is gone after a reboot, until keepalived reports the state.
-    [ -e /var/run/keepalived_scripts.lease_sync ] || return
+    # it for "off". It is gone after a reboot, and nothing writes it after an
+    # install or a change of the settings, so the current state is looked at
+    # when it is missing.
+    local wanted=/var/run/keepalived_scripts.lease_sync
+    [ -e "$wanted" ] || ACTION=reconcile sh /etc/hotplug.d/keepalived/560-keepalived-scripts >/dev/null 2>&1
+    [ -e "$wanted" ] || return
 
     procd_open_instance
     procd_set_param command /etc/keepalived/scripts/sync_dhcp.sh daemon

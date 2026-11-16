@@ -8,8 +8,10 @@
 # can be trimmed to the lines that differ.
 
 config keepalived_scripts 'global'
-    # 0 = the script does nothing at all
-    option enabled '1'
+    # 0 = the script does nothing at all. Off until you switch it on: check
+    # the actions of every state first (they act on a VRRP that may be in
+    # use), then set this to 1 or tick Enabled in the LuCI page.
+    option enabled '0'
     # seconds to wait after keepalived started before the first BACKUP is
     # acted on (keepalived always starts as BACKUP, and may become MASTER)
     option settle_delay '5'

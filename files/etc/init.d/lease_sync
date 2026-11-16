@@ -20,6 +20,9 @@ start_service() {
     procd_open_instance
     procd_set_param command /etc/keepalived/scripts/sync_dhcp.sh daemon
     procd_set_param respawn
+    # the settings are read while the daemon runs, so procd must restart it
+    # when they change: a reload that finds the same command keeps the old process
+    procd_set_param file /etc/config/keepalived_scripts
     procd_set_param stdout 0
     procd_set_param stderr 0
     procd_close_instance

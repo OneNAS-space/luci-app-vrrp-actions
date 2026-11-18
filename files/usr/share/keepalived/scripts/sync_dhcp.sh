@@ -453,6 +453,16 @@ dhcp_log_err() {
     [ "$DHCP_FAILED" -eq 1 ] || logger "sync_dhcp: $*"
 }
 
+# "uci commit" alone does not tell anybody. LuCI's Save & Apply sends the
+# config.change event, which is what services that follow the dhcp config
+# (luci-app-bypass reads the VPN hosts from it) listen to. Send the same
+# event after the sync has written a new dhcp config.
+notify_dhcp_changed() {
+    command -v ubus >/dev/null 2>&1 || return 0
+    ubus call service event '{"type":"config.change","data":{"package":"dhcp"}}' >/dev/null 2>&1 \
+        || logger "sync_dhcp: Could not send the dhcp config change event."
+}
+
 restart_dhcp_services() {
     /etc/init.d/dnsmasq running >/dev/null 2>&1 && { /etc/init.d/dnsmasq restart >/dev/null 2>&1 || logger "sync_dhcp: Error restarting dnsmasq after the dhcp config update."; }
     /etc/init.d/odhcpd running >/dev/null 2>&1 && { /etc/init.d/odhcpd restart >/dev/null 2>&1 || logger "sync_dhcp: Error restarting odhcpd after the dhcp config update."; }
@@ -533,6 +543,8 @@ apply_dhcp() {
     fi
     rm -f "$keep_file"
     logger "sync_dhcp: dhcp config updated from the peer, previous $DHCP_CONFIG saved as $DHCP_BACKUP_COPY"
+
+    notify_dhcp_changed
 
     # only when something really changed (and not when the caller restarts
     # the services anyway, see pull_dhcp)
